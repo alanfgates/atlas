@@ -44,18 +44,21 @@ public class JanusGraphProviderTest {
     }
 
     @AfterClass
-    public void tearDown() throws Exception {
-        try {
-            graph.shutdown();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    public void tearDown() {
+        if (graph != null) {
+            try {
+                graph.shutdown();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
-        try {
-            graph.clear();
-        } catch (Exception e) {
-            e.printStackTrace();
+            try {
+                graph.clear();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
+        graph = null;
     }
 
     @Test

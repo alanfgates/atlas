@@ -567,6 +567,23 @@
         </profile>
 
         <profile>
+            <!-- This profile is for testing Atlas against a local instance of DynamoDB.  Only activate it when running
+                 tests under graphdb/janus/src/test/.../dynamo.  No guarantees for other tests. -->
+            <id>dynamo</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <properties>
+                <surefire.forkCount>1</surefire.forkCount>
+                <surefire.reuseForks>false</surefire.reuseForks>
+                <graph.storage.backend>dynamo</graph.storage.backend>
+                <graph.storage.dynamo.region>us-west-2</graph.storage.dynamo.region>
+                <graph.storage.dynamo.url>http://localhost:8000</graph.storage.dynamo.url>
+                <graph.storage.dynamo.maxconnections>64</graph.storage.dynamo.maxconnections>
+            </properties>
+        </profile>
+
+        <profile>
             <id>dist</id>
             <activation>
                 <activeByDefault>false</activeByDefault>

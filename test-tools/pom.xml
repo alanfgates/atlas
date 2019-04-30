@@ -56,6 +56,14 @@
                     <groupId>com.github.ben-manes.caffeine</groupId>
                     <artifactId>caffeine</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.restlet.jee</groupId>
+                    <artifactId>org.restlet</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.restlet.jee</groupId>
+                    <artifactId>org.restlet.ext.servlet</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
