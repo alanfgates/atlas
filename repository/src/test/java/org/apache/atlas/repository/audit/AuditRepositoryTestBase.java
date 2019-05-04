@@ -83,6 +83,7 @@ public class AuditRepositoryTestBase {
         assertEventV1Equals(events.get(2), expectedEvents.get(2));
 
         //Use last event's timestamp for next list(). Should give only 1 event and shouldn't include events from other id
+        System.out.println("XXX Looking for eventKey " + events.get(2).getEventKey());
         events = eventRepository.listEventsV1(id2, events.get(2).getEventKey(), (short) 3);
         assertEquals(events.size(), 1);
         assertEventV1Equals(events.get(0), expectedEvents.get(2));

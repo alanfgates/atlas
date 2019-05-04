@@ -20,6 +20,7 @@ package org.apache.atlas.repository.graphdb.janus.dynamo;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import org.apache.atlas.AtlasException;
+import org.apache.atlas.dynamo.DynamoTestUtils;
 import org.apache.atlas.graph.GraphSandboxUtil;
 import org.apache.atlas.repository.Constants;
 import org.apache.atlas.repository.graphdb.AtlasCardinality;

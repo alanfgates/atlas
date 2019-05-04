@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.atlas.repository.graphdb.janus.dynamo;
+package org.apache.atlas.dynamo;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -27,7 +27,7 @@ import java.io.InputStreamReader;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-class DynamoTestUtils {
+public class DynamoTestUtils {
   private static final Logger LOG = LoggerFactory.getLogger(DynamoTestUtils.class);
 
   private static final String BASE_CONTAINER_NAME = "atlas-dynamo-test-";
@@ -35,14 +35,14 @@ class DynamoTestUtils {
   private static final String PORT_MAPPING = "8000:8000";
 
 
-  static void setFakeCredentials() {
+  public static void setFakeCredentials() {
     LOG.debug("Setting to use janus");
     System.setProperty("aws.accessKeyId", "abc");
     System.setProperty("aws.secretKey", "123");
     System.setProperty("janus.use.dynamo", "true");
   }
 
-  static String startDockerDynamo() throws IOException, InterruptedException {
+  public static String startDockerDynamo() throws IOException, InterruptedException {
     String name = genContainerName();
     LOG.info("Starting DynamoDB in a container with name " + name);
     if (runCmdAndPrintStreams(new String[] {"docker", "run", "--name", name, "-p", PORT_MAPPING, "-d",
@@ -52,7 +52,7 @@ class DynamoTestUtils {
     return name;
   }
 
-  static void shutdownDockerDynamo(String name) throws IOException, InterruptedException {
+  public static void shutdownDockerDynamo(String name) throws IOException, InterruptedException {
     if (name == null) return;
     LOG.info("Shutting down DynamoDB in docker container");
     if (runCmdAndPrintStreams(new String[]{"docker", "stop", name}, 30) != 0) {
