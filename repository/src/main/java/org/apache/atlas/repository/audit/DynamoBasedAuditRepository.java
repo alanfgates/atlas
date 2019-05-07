@@ -86,6 +86,7 @@ public class DynamoBasedAuditRepository extends AbstractStorageBasedAuditReposit
   private String tableName;
   private Configuration conf;
   private boolean persistEntityDefinition;
+  private DynamoDB dynamo;  // Don't access directly, use getConnection
 
   @Override
   public void putEventsV1(List<EntityAuditEvent> events) throws AtlasException {
@@ -117,8 +118,8 @@ public class DynamoBasedAuditRepository extends AbstractStorageBasedAuditReposit
 
   @Override
   public Set<String> getEntitiesWithTagChanges(long fromTimestamp, long toTimestamp) throws AtlasBaseException {
-    try (DynamoConnection dynamo = getConnection()) {
-      Table table = getTable(dynamo);
+    try {
+      Table table = getTable();
       ItemCollection<ScanOutcome> results =
           table.scan(new ScanFilter(SORT_KEY).between(convertTimestamp(toTimestamp), convertTimestamp(fromTimestamp)));
       Set<String> eventIds = new HashSet<>();
@@ -141,54 +142,68 @@ public class DynamoBasedAuditRepository extends AbstractStorageBasedAuditReposit
     persistEntityDefinition = fullConf.getBoolean(CONFIG_PERSIST_ENTITY_DEFINITION, false);
 
     // Create the table if it does not already exist
-    try (DynamoConnection dynamo = getConnection()) {
-      LOG.info("Looking for table " + tableName);
-      TableCollection<ListTablesResult> existingTables = dynamo.get().listTables();
-      boolean foundIt = false;
-      for (Table maybe : existingTables) {
-        if (maybe.getTableName().equals(tableName)) {
-          foundIt = true;
-          break;
-        }
+    DynamoDB dynamo = getConnection();
+    LOG.info("Looking for table " + tableName);
+    TableCollection<ListTablesResult> existingTables = dynamo.listTables();
+    boolean foundIt = false;
+    for (Table maybe : existingTables) {
+      if (maybe.getTableName().equals(tableName)) {
+        foundIt = true;
+        break;
       }
-      if (!foundIt) {
-        LOG.info("Table " + tableName + " not found, will create it");
-        CreateTableRequest tableDef = new CreateTableRequest()
-            .withTableName(tableName)
-            .withKeySchema(
-                new KeySchemaElement(PARTITION_KEY, KeyType.HASH),
-                new KeySchemaElement(SORT_KEY, KeyType.RANGE))
-            .withAttributeDefinitions(
-                new AttributeDefinition(PARTITION_KEY, ScalarAttributeType.S),
-                new AttributeDefinition(SORT_KEY, ScalarAttributeType.N))
-            .withProvisionedThroughput(new ProvisionedThroughput(conf.getLong(DYNAMO_READ_THROUGHPUT, 10L), conf.getLong(DYNAMO_WRITE_THROUGHPUT, 10L)));
-        try {
-          Table table = dynamo.get().createTable(tableDef);
-          table.waitForActive();
-        } catch (Exception e) {
-          throw new AtlasException("Unable to create table " + tableName, e);
-        }
+    }
+    if (!foundIt) {
+      LOG.info("Table " + tableName + " not found, will create it");
+      CreateTableRequest tableDef = new CreateTableRequest()
+          .withTableName(tableName)
+          .withKeySchema(
+              new KeySchemaElement(PARTITION_KEY, KeyType.HASH),
+              new KeySchemaElement(SORT_KEY, KeyType.RANGE))
+          .withAttributeDefinitions(
+              new AttributeDefinition(PARTITION_KEY, ScalarAttributeType.S),
+              new AttributeDefinition(SORT_KEY, ScalarAttributeType.N))
+          .withProvisionedThroughput(new ProvisionedThroughput(conf.getLong(DYNAMO_READ_THROUGHPUT, 10L), conf.getLong(DYNAMO_WRITE_THROUGHPUT, 10L)));
+      try {
+        Table table = dynamo.createTable(tableDef);
+        table.waitForActive();
+      } catch (Exception e) {
+        throw new AtlasException("Unable to create table " + tableName, e);
       }
     }
   }
 
   @Override
   public void stop() {
-
+    if (dynamo != null) {
+      synchronized (this) {
+        if (dynamo != null) {
+          dynamo.shutdown();
+          dynamo = null;
+        }
+      }
+    }
   }
 
-  private DynamoConnection getConnection() {
-    LOG.debug("Connecting to DynamoDB at endpoint " + conf.getString(DYNAMO_URL) + " and region " +
-        conf.getString(DYNAMO_REGION));
-    assert conf.getString(DYNAMO_URL) != null;
-    assert conf.getString(DYNAMO_REGION) != null;
-    AmazonDynamoDB client = AmazonDynamoDBClientBuilder
-        .standard()
-        .withEndpointConfiguration(
-            new AwsClientBuilder.EndpointConfiguration(conf.getString(DYNAMO_URL), conf.getString(DYNAMO_REGION))
-        )
-        .build();
-    return new DynamoConnection(new DynamoDB(client));
+  private DynamoDB getConnection() {
+    if (dynamo == null) {
+      synchronized (this) {
+        if (dynamo == null) {
+          LOG.debug("Connecting to DynamoDB at endpoint " + conf.getString(DYNAMO_URL) + " and region " +
+              conf.getString(DYNAMO_REGION));
+          assert conf.getString(DYNAMO_URL) != null;
+          assert conf.getString(DYNAMO_REGION) != null;
+          AmazonDynamoDB client = AmazonDynamoDBClientBuilder
+              .standard()
+              .withEndpointConfiguration(
+                  new AwsClientBuilder.EndpointConfiguration(conf.getString(DYNAMO_URL), conf.getString(DYNAMO_REGION))
+              )
+              .build();
+          dynamo = new DynamoDB(client);
+
+        }
+      }
+    }
+    return dynamo;
   }
 
   // The interface wants timestamps to come back in reverse order.  By start it also means closest to now, not
@@ -198,8 +213,9 @@ public class DynamoBasedAuditRepository extends AbstractStorageBasedAuditReposit
   }
 
   private void putEvents(List<EventWrapper> events) throws AtlasBaseException {
-    try (DynamoConnection dynamo = getConnection()) {
-      Table table = getTable(dynamo);
+    DynamoDB dynamo = getConnection();
+    try {
+      Table table = getTable();
       for (EventWrapper event : events) {
         Item item = new Item()
             .withPrimaryKey(PARTITION_KEY, event.getEntityId(), SORT_KEY, convertTimestamp(event.getTimestamp()))
@@ -222,8 +238,8 @@ public class DynamoBasedAuditRepository extends AbstractStorageBasedAuditReposit
     // How this works, as near as I can tell.  The startKey is not the timestamp, as one might reasonably expect.
     // Instead, it is the entityId:timestamp.  Furthermore, it is expected that this method return the entries in
     // reverse order (that is, more recent entries first).
-    try (DynamoConnection dynamo = getConnection()) {
-      Table table = getTable(dynamo);
+    try {
+      Table table = getTable();
 
       ItemCollection<QueryOutcome> results;
       if (StringUtils.isEmpty(startKey)) {
@@ -257,25 +273,8 @@ public class DynamoBasedAuditRepository extends AbstractStorageBasedAuditReposit
     }
   }
 
-  private Table getTable(DynamoConnection dynamo) {
-    return dynamo.get().getTable(tableName);
-  }
-
-  private class DynamoConnection implements Closeable {
-    private final DynamoDB dynamo;
-
-    DynamoConnection(DynamoDB dynamo) {
-      this.dynamo = dynamo;
-    }
-
-    DynamoDB get() {
-      return dynamo;
-    }
-
-    @Override
-    public void close() {
-      dynamo.shutdown();
-    }
+  private Table getTable() {
+    return getConnection().getTable(tableName);
   }
 
   // Why does this need to be done here?  A generic interface should be included somewhere higher up.
